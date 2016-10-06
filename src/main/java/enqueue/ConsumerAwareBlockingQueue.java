@@ -32,7 +32,7 @@ public class ConsumerAwareBlockingQueue<T> {
         this.mask = new BitSet[capacity];
         for (int i = 0; i < capacity; i++) {
             mask[i] = new BitSet(consumer);
-            mask[i].clear(0, consumer);
+            mask[i].set(0, consumer);
         }
         readIndex = new int[consumer];
         Arrays.fill(readIndex, -1);
