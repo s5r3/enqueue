@@ -95,6 +95,7 @@ public class ConsumerAwareBlockingQueue<T> {
         }
 
         T element = elements[index];
+        readIndex[consumerIndex] = index;
         mask[index].set(consumerIndex);
         synchronized (writerMonitor) {
             writerMonitor.notifyAll();
@@ -127,7 +128,7 @@ public class ConsumerAwareBlockingQueue<T> {
     }
 
     private synchronized int nextIndexFor(int consumerIndex) {
-        readIndex[consumerIndex] = ++readIndex[consumerIndex] == consumer ? 0 : readIndex[consumerIndex];
-        return readIndex[consumerIndex];
+        int nextIndex = readIndex[consumerIndex] + 1;
+        return nextIndex == capacity ? 0 : nextIndex;
     }
 }
