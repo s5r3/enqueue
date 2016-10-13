@@ -120,6 +120,7 @@ public class ConsumerAwareBlockingQueue<T> {
         }
 
         T element = elements[index];
+        readIndex[consumerIndex] = index;
         mask[index].set(consumerIndex);
         synchronized (writerMonitor) {
             writerMonitor.notifyAll();
