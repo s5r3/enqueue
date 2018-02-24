@@ -40,17 +40,16 @@ public class ConsumerAwareBlockingQueue<T> {
     }
 
     public void put(T element) throws InterruptedException {
-        while (!mask[head].equals(ONE)) {
-            synchronized (writerMonitor) {
+        synchronized (writerMonitor) {
+            while (!mask[head].equals(ONE)) {
                 writerMonitor.wait();
             }
-        }
-
-        elements[head] = element;
-        mask[head].and(ZERO);
-        ++head;
-        if (head == capacity) {
-            head = 0;
+            elements[head] = element;
+            mask[head].and(ZERO);
+            ++head;
+            if (head == capacity) {
+                head = 0;
+            }
         }
 
         synchronized (readerMonitor) {
@@ -63,17 +62,18 @@ public class ConsumerAwareBlockingQueue<T> {
             synchronized (writerMonitor) {
                 writerMonitor.wait(timeout);
             }
-        }
 
-        if (!mask[head].equals(ONE)) {
-            return false;
-        }
+            if (!mask[head].equals(ONE)) {
+                return false;
+            }
 
-        elements[head] = element;
-        mask[head].and(ZERO);
-        ++head;
-        if (head == capacity) {
-            head = 0;
+            elements[head] = element;
+            mask[head].and(ZERO);
+            ++head;
+            if (head == capacity) {
+                head = 0;
+            }
+
         }
 
         synchronized (readerMonitor) {
@@ -88,15 +88,16 @@ public class ConsumerAwareBlockingQueue<T> {
         }
 
         int index = nextIndexFor(consumerIndex);
-        while (mask[index].get(consumerIndex)) {
-            synchronized (readerMonitor) {
+        T element;
+        synchronized (readerMonitor) {
+            while (mask[index].get(consumerIndex)) {
                 readerMonitor.wait();
             }
+            element = elements[index];
+            readIndex[consumerIndex] = index;
+            mask[index].set(consumerIndex);
         }
 
-        T element = elements[index];
-        readIndex[consumerIndex] = index;
-        mask[index].set(consumerIndex);
         synchronized (writerMonitor) {
             writerMonitor.notifyAll();
         }
@@ -109,19 +110,21 @@ public class ConsumerAwareBlockingQueue<T> {
         }
 
         int index = nextIndexFor(consumerIndex);
+        T element = null;
         while (mask[index].get(consumerIndex)) {
             synchronized (readerMonitor) {
                 readerMonitor.wait(timeout);
             }
+
+            if (mask[index].get(consumerIndex)) {
+                return null;
+            }
+
+            element = elements[index];
+            readIndex[consumerIndex] = index;
+            mask[index].set(consumerIndex);
         }
 
-        if (mask[index].get(consumerIndex)) {
-            return null;
-        }
-
-        T element = elements[index];
-        readIndex[consumerIndex] = index;
-        mask[index].set(consumerIndex);
         synchronized (writerMonitor) {
             writerMonitor.notifyAll();
         }
