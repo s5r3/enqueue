@@ -17,6 +17,7 @@ public class ConsumerAwareBlockingQueue<T> {
     private BitSet[] mask;
     private int[] readIndex;
     private int head;
+    private int remainingCapacity;
 
     private final Object writerMonitor = new Object();
     private final Object readerMonitor = new Object();
@@ -28,6 +29,7 @@ public class ConsumerAwareBlockingQueue<T> {
         ONE.set(0, consumer);
         this.capacity = capacity;
         this.consumer = consumer;
+        this.remainingCapacity = capacity;
         this.elements = (T[]) new Object[capacity];
         this.mask = new BitSet[capacity];
         for (int i = 0; i < capacity; i++) {
@@ -47,6 +49,7 @@ public class ConsumerAwareBlockingQueue<T> {
             elements[head] = element;
             mask[head].and(ZERO);
             ++head;
+            --remainingCapacity;
             if (head == capacity) {
                 head = 0;
             }
@@ -58,10 +61,9 @@ public class ConsumerAwareBlockingQueue<T> {
     }
 
     public boolean offer(T element, long timeout) throws InterruptedException {
-        while (!mask[head].equals(ONE)) {
-            synchronized (writerMonitor) {
+        synchronized (writerMonitor) {
+            if (!mask[head].equals(ONE))
                 writerMonitor.wait(timeout);
-            }
 
             if (!mask[head].equals(ONE)) {
                 return false;
@@ -70,6 +72,7 @@ public class ConsumerAwareBlockingQueue<T> {
             elements[head] = element;
             mask[head].and(ZERO);
             ++head;
+            --remainingCapacity;
             if (head == capacity) {
                 head = 0;
             }
@@ -96,6 +99,8 @@ public class ConsumerAwareBlockingQueue<T> {
             element = elements[index];
             readIndex[consumerIndex] = index;
             mask[index].set(consumerIndex);
+            if (mask[index].equals(ONE))
+                ++remainingCapacity;
         }
 
         synchronized (writerMonitor) {
@@ -105,14 +110,16 @@ public class ConsumerAwareBlockingQueue<T> {
     }
 
     public T poll(int consumerIndex, long timeout) throws InterruptedException {
+
         if (consumerIndex >= consumer) {
             throw new IllegalArgumentException("Maximum consumer index allowed is " + (consumer - 1));
         }
 
         int index = nextIndexFor(consumerIndex);
         T element = null;
-        while (mask[index].get(consumerIndex)) {
-            synchronized (readerMonitor) {
+        synchronized (readerMonitor) {
+            if (mask[index].get(consumerIndex)) {
+                System.out.println("waiting");
                 readerMonitor.wait(timeout);
             }
 
@@ -123,16 +130,23 @@ public class ConsumerAwareBlockingQueue<T> {
             element = elements[index];
             readIndex[consumerIndex] = index;
             mask[index].set(consumerIndex);
+            if (mask[index].equals(ONE))
+                ++remainingCapacity;
         }
 
         synchronized (writerMonitor) {
             writerMonitor.notifyAll();
         }
+
         return element;
     }
 
     private synchronized int nextIndexFor(int consumerIndex) {
         int nextIndex = readIndex[consumerIndex] + 1;
         return nextIndex == capacity ? 0 : nextIndex;
+    }
+
+    public int remainingCapacity() {
+        return remainingCapacity;
     }
 }
